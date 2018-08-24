@@ -1,0 +1,108 @@
+#!/bin/sh
+
+#############
+# VARIABLES #
+#############
+
+# SCRIPTNAME contains the name
+# of the current script (e.g. "server")
+SCRIPTNAME="bin/$(basename $0)"
+
+# NETWORK contains the name
+# of the default network for nginx-proxy
+NETWORK=nginx-proxy_default
+
+# COLORS
+SUCCESS=`tput setaf 2`
+WARNING=`tput setaf 3`
+DANGER=`tput setaf 1`
+NC=`tput sgr0` # No Color
+
+#############
+# FUNCTIONS #
+#############
+
+#######################################
+# Verify if container is running
+# server control script
+# Globals:
+#   None
+# Arguments:
+#   $1 container_name|container_id
+# Returns:
+#   0|1
+#######################################
+containerIsRunning () {
+    if [[ $(docker inspect -f '{{.State.Running}}' $1) = "true" ]]; then 
+        return 0
+    else 
+        return 1
+    fi
+}
+
+#######################################
+# Print the usage information for the
+# server control script
+# Globals:
+#   SCRIPTNAME
+# Arguments:
+#   None
+# Returns:
+#   None
+#######################################
+usage() {
+  echo "Utility for controlling dockerized Magento projects\n"
+  echo "Usage:\n\n  $SCRIPTNAME <action> <arguments...>"
+  echo ""
+  echo "Actions:\n"
+  printf "  %-15s%-30s\n" "connect" "Connect a container to nginx-proxy network"
+  printf "  %-15s%-30s\n" "disconnect" "Disconnect a container from nginx-proxy network"
+}
+
+#######################################
+# Receive options and trigger actions
+# Globals:
+#   None
+# Arguments:
+#   $1 option
+# Returns:
+#   None
+#######################################
+
+case "$1" in
+    connect)
+        containerIsRunning $2
+        if [[ $? -eq 1 ]]; then
+            echo "${DANGER} Container $2 Not Running"
+            exit 0
+        fi
+        docker network inspect $NETWORK | grep -q "$2"
+        if [ $? == 0 ]; then
+            echo "${WARNING} $2 already is connected to network $NETWORK"
+            exit 0
+        fi
+        docker network connect $NETWORK $2
+        docker restart $2
+        echo "${SUCCESS} Container $2 connected to $NETWORK network"        
+    ;;
+    disconnect)
+        containerIsRunning $2
+        if [[ $? -eq 1 ]]; then
+            echo "${DANGER} Container $2 Not Running"
+            exit 0
+        fi
+        docker network inspect $NETWORK | grep -q "$2"
+        if [ $? != 0 ]; then
+            echo "${WARNING} $2 is not connected to network $NETWORK"
+            exit 0
+        fi
+        docker network disconnect $NETWORK $2
+        docker restart $2
+        echo "${SUCCESS} Container $2 disconnected from $NETWORK network"
+    ;;
+    *)
+        usage
+    ;;
+esac
+
+exit 0
